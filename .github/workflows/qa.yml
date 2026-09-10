@@ -1,4 +1,5 @@
 name: Контроль качества
+run-name: "Контроль качества ${{ inputs.leg || github.event_name }} ${{ inputs.racecar_run }}"
 
 # Модель запуска (триггеры, забор кода PR, гейт для форков) описана в
 # .github/workflows/README.md - она общая для всех тестовых workflow.
@@ -11,7 +12,24 @@ on:
       - 'release/**'
   pull_request_target:
   workflow_dispatch:
+    inputs:
+      leg:
+        description: "baseline (uninstrumented) or instrumented (under chalk/curiosity)"
+        type: choice
+        options: [instrumented, baseline]
+        default: baseline
+      profile:
+        description: "CrashOverride chalk profile"
+        type: string
+        default: curiosity-tests-racecar
+      racecar_run:
+        description: "racecar correlation token, echoed into the run name"
+        type: string
+        default: ""
 
+
+env:
+  CHALK_ON: ${{ inputs.leg == 'instrumented' }}
 concurrency:
   # event входит в ключ намеренно: у PR, открытых до перехода на pull_request_target,
   # в ветке лежит старая версия этого workflow с триггером pull_request, а её прогон
@@ -88,9 +106,11 @@ jobs:
         id: extract_version
 
       - name: Настройка sonar-scanner
+        continue-on-error: true   # racecar: scan/report step, must not fail the build
         uses: warchant/setup-sonar-scanner@v10
 
       - name: Анализ в SonarQube (branch)
+        continue-on-error: true   # racecar: scan/report step, must not fail the build
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -108,6 +128,7 @@ jobs:
       # кавычки и `;`. Поэтому все значения из контекста PR передаются через env, а не
       # подставляются в текст скрипта.
       - name: Анализ в SonarQube (pull-request)
+        continue-on-error: true   # racecar: scan/report step, must not fail the build
         if: github.event_name == 'pull_request_target'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
